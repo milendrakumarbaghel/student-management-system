@@ -13,29 +13,34 @@ import java.util.Map;
 
 public class RegistrationDAO {
 
-    public boolean registrationExists(Connection connection, int studentId, String courseName) throws SQLException {
-        String sql = "SELECT 1 FROM registration WHERE student_id = ? AND course_name = ?";
+    public boolean registrationExists(Connection connection, int studentId, int courseId, String courseName) throws SQLException {
+        String sql = "SELECT 1 FROM registration WHERE student_id = ? AND (course_id = ? OR course_name = ?)";
         try (PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
             preparedStatement.setInt(1, studentId);
-            preparedStatement.setString(2, courseName);
+            preparedStatement.setInt(2, courseId);
+            preparedStatement.setString(3, courseName);
             try (ResultSet resultSet = preparedStatement.executeQuery()) {
                 return resultSet.next();
             }
         }
     }
 
-    public boolean insertRegistration(Connection connection, int studentId, String courseName, double fee) throws SQLException {
-        String sql = "INSERT INTO registration (student_id, course_name, fees_paid) VALUES (?, ?, ?)";
+    public boolean insertRegistration(Connection connection, int studentId, int courseId, String courseName, double fee) throws SQLException {
+        String sql = "INSERT INTO registration (student_id, course_id, course_name, fees_paid) VALUES (?, ?, ?, ?)";
         try (PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
             preparedStatement.setInt(1, studentId);
-            preparedStatement.setString(2, courseName);
-            preparedStatement.setDouble(3, fee);
+            preparedStatement.setInt(2, courseId);
+            preparedStatement.setString(3, courseName);
+            preparedStatement.setDouble(4, fee);
             return preparedStatement.executeUpdate() > 0;
         }
     }
 
     public List<Registration> findByStudentId(Connection connection, int studentId) throws SQLException {
-        String sql = "SELECT reg_id, student_id, course_name, fees_paid FROM registration WHERE student_id = ? ORDER BY reg_id";
+        String sql = "SELECT r.reg_id, r.student_id, r.course_id, COALESCE(c.course_name, r.course_name) AS course_name, r.fees_paid "
+                + "FROM registration r "
+                + "LEFT JOIN courses c ON r.course_id = c.course_id OR r.course_name = c.course_name "
+                + "WHERE r.student_id = ? ORDER BY r.reg_id";
         List<Registration> registrations = new ArrayList<>();
 
         try (PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
@@ -45,6 +50,7 @@ public class RegistrationDAO {
                     registrations.add(new Registration(
                             resultSet.getInt("reg_id"),
                             resultSet.getInt("student_id"),
+                            resultSet.getInt("course_id"),
                             resultSet.getString("course_name"),
                             resultSet.getDouble("fees_paid")
                     ));
@@ -55,21 +61,23 @@ public class RegistrationDAO {
         return registrations;
     }
 
-    public boolean updateCourseFee(Connection connection, int studentId, String courseName, double fee) throws SQLException {
-        String sql = "UPDATE registration SET fees_paid = ? WHERE student_id = ? AND course_name = ?";
+    public boolean updateCourseFee(Connection connection, int studentId, int courseId, String courseName, double fee) throws SQLException {
+        String sql = "UPDATE registration SET fees_paid = ? WHERE student_id = ? AND (course_id = ? OR course_name = ?)";
         try (PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
             preparedStatement.setDouble(1, fee);
             preparedStatement.setInt(2, studentId);
-            preparedStatement.setString(3, courseName);
+            preparedStatement.setInt(3, courseId);
+            preparedStatement.setString(4, courseName);
             return preparedStatement.executeUpdate() > 0;
         }
     }
 
-    public boolean cancelRegistration(Connection connection, int studentId, String courseName) throws SQLException {
-        String sql = "DELETE FROM registration WHERE student_id = ? AND course_name = ?";
+    public boolean cancelRegistration(Connection connection, int studentId, int courseId, String courseName) throws SQLException {
+        String sql = "DELETE FROM registration WHERE student_id = ? AND (course_id = ? OR course_name = ?)";
         try (PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
             preparedStatement.setInt(1, studentId);
-            preparedStatement.setString(2, courseName);
+            preparedStatement.setInt(2, courseId);
+            preparedStatement.setString(3, courseName);
             return preparedStatement.executeUpdate() > 0;
         }
     }
@@ -83,8 +91,10 @@ public class RegistrationDAO {
     }
 
     public Map<String, Integer> fetchCourseWiseCount(Connection connection) throws SQLException {
-        String sql = "SELECT course_name, COUNT(DISTINCT student_id) AS student_count "
-                + "FROM registration GROUP BY course_name ORDER BY course_name";
+        String sql = "SELECT c.course_name, COUNT(DISTINCT r.student_id) AS student_count "
+                + "FROM courses c "
+                + "LEFT JOIN registration r ON c.course_id = r.course_id OR c.course_name = r.course_name "
+                + "GROUP BY c.course_id, c.course_name ORDER BY c.course_name";
 
         Map<String, Integer> result = new LinkedHashMap<>();
         try (PreparedStatement preparedStatement = connection.prepareStatement(sql);

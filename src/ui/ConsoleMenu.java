@@ -1,23 +1,32 @@
 package ui;
 
 import input.ConsoleInput;
+import model.Branch;
+import model.Course;
 import model.Registration;
 import model.Student;
+import services.BranchService;
+import services.CourseService;
 import services.RegistrationService;
 import services.StudentService;
 
 import java.util.List;
 import java.util.Map;
 
+
 public class ConsoleMenu {
 
     private final StudentService studentService;
     private final RegistrationService registrationService;
+    private final CourseService courseService;
+    private final BranchService branchService;
     private final ConsoleInput consoleInput;
 
-    public ConsoleMenu(StudentService studentService, RegistrationService registrationService, ConsoleInput consoleInput) {
+    public ConsoleMenu(StudentService studentService, RegistrationService registrationService, CourseService courseService, BranchService branchService, ConsoleInput consoleInput) {
         this.studentService = studentService;
         this.registrationService = registrationService;
+        this.courseService = courseService;
+        this.branchService = branchService;
         this.consoleInput = consoleInput;
     }
 
@@ -38,11 +47,13 @@ public class ConsoleMenu {
                 case 8 -> deleteStudent();
                 case 9 -> highPayingReport();
                 case 10 -> courseWiseCount();
-                case 11 -> {
+                case 11 -> addCourse();
+                case 12 -> addBranch();
+                case 13 -> {
                     running = false;
                     System.out.println("Exiting... Goodbye!");
                 }
-                default -> System.out.println("Invalid choice. Please select 1-11.");
+                default -> System.out.println("Invalid choice. Please select 1-13.");
             }
         }
     }
@@ -59,11 +70,22 @@ public class ConsoleMenu {
         System.out.println("8. Delete Student");
         System.out.println("9. High Paying Students Report");
         System.out.println("10. Course-wise Student Count");
-        System.out.println("11. Exit");
+        System.out.println("11. Add New Course");
+        System.out.println("12. Add New Branch");
+        System.out.println("13. Exit");
     }
 
     private void addStudent() {
         int id = consoleInput.readInt("Enter student ID: ");
+        if (id <= 0) {
+            System.out.println("Student ID must be positive.");
+            return;
+        }
+        if (studentService.findStudentById(id) != null) {
+            System.out.println("Student ID already exists. Please use a unique ID.");
+            return;
+        }
+
         String name = consoleInput.readNonEmpty("Enter name: ");
         int age = consoleInput.readInt("Enter age: ");
         String branch = consoleInput.readNonEmpty("Enter branch: ");
@@ -74,10 +96,18 @@ public class ConsoleMenu {
 
     private void registerForCourse() {
         int studentId = consoleInput.readInt("Enter student ID: ");
-        String course = consoleInput.readNonEmpty("Enter course name: ");
+        Branch selectedBranch = selectBranch();
+        if (selectedBranch == null) {
+            return;
+        }
+
+        Course selectedCourse = selectCourseByBranch(selectedBranch.getBranchId());
+        if (selectedCourse == null) {
+            return;
+        }
         double fee = consoleInput.readDouble("Enter fee paid: ");
 
-        boolean registered = registrationService.registerForCourse(studentId, course, fee);
+        boolean registered = registrationService.registerForCourse(studentId, selectedBranch.getBranchId(), selectedCourse.getCourseId(), fee);
         System.out.println(registered ? "Registration successful." : "Registration failed.");
     }
 
@@ -132,18 +162,34 @@ public class ConsoleMenu {
 
     private void updateCourseFee() {
         int studentId = consoleInput.readInt("Enter student ID: ");
-        String course = consoleInput.readNonEmpty("Enter course name: ");
+        Branch selectedBranch = selectBranch();
+        if (selectedBranch == null) {
+            return;
+        }
+
+        Course selectedCourse = selectCourseByBranch(selectedBranch.getBranchId());
+        if (selectedCourse == null) {
+            return;
+        }
         double fee = consoleInput.readDouble("Enter new fee: ");
 
-        boolean updated = registrationService.updateCourseFee(studentId, course, fee);
+        boolean updated = registrationService.updateCourseFee(studentId, selectedCourse.getCourseId(), fee);
         System.out.println(updated ? "Course fee updated successfully." : "Course fee update failed.");
     }
 
     private void cancelRegistration() {
         int studentId = consoleInput.readInt("Enter student ID: ");
-        String course = consoleInput.readNonEmpty("Enter course name: ");
+        Branch selectedBranch = selectBranch();
+        if (selectedBranch == null) {
+            return;
+        }
 
-        boolean cancelled = registrationService.cancelRegistration(studentId, course);
+        Course selectedCourse = selectCourseByBranch(selectedBranch.getBranchId());
+        if (selectedCourse == null) {
+            return;
+        }
+
+        boolean cancelled = registrationService.cancelRegistration(studentId, selectedCourse.getCourseId());
         System.out.println(cancelled ? "Registration cancelled successfully." : "Cancellation failed.");
     }
 
@@ -172,13 +218,96 @@ public class ConsoleMenu {
     private void courseWiseCount() {
         Map<String, Integer> rows = registrationService.getCourseWiseStudentCount();
         if (rows.isEmpty()) {
-            System.out.println("No registrations found.");
+            System.out.println("No courses found.");
             return;
         }
 
         System.out.println("\nCourse -> Number of Students");
         for (Map.Entry<String, Integer> row : rows.entrySet()) {
             System.out.printf("%s -> %d%n", row.getKey(), row.getValue());
+        }
+    }
+
+    private void addCourse() {
+        Branch selectedBranch = selectBranch();
+        if (selectedBranch == null) {
+            return;
+        }
+
+        String courseName = consoleInput.readNonEmpty("Enter course name: ");
+        List<Course> coursesInBranch = courseService.getCoursesByBranchId(selectedBranch.getBranchId());
+        for (Course course : coursesInBranch) {
+            if (course.getCourseName().equalsIgnoreCase(courseName.trim())) {
+                System.out.println("Course already exists for this branch.");
+                return;
+            }
+        }
+
+        boolean added = courseService.addCourse(selectedBranch.getBranchId(), courseName);
+        System.out.println(added ? "Course added successfully." : "Failed to add course.");
+    }
+
+    private void addBranch() {
+        String branchName = consoleInput.readNonEmpty("Enter branch name: ");
+        boolean added = branchService.addBranch(branchName);
+        System.out.println(added ? "Branch added successfully." : "Failed to add branch.");
+    }
+
+    private Branch selectBranch() {
+        List<Branch> branches = branchService.getAllBranches();
+        if (branches.isEmpty()) {
+            System.out.println("No branches available. Please add a branch first.");
+            return null;
+        }
+
+        System.out.println("\nAvailable Branches:");
+        for (Branch branch : branches) {
+            System.out.printf("%d | %s%n", branch.getBranchId(), branch.getBranchName());
+        }
+
+        while (true) {
+            int branchId = consoleInput.readInt("Select branch ID: ");
+            if (branchId <= 0) {
+                System.out.println("Branch ID must be positive.");
+                continue;
+            }
+
+            for (Branch branch : branches) {
+                if (branch.getBranchId() == branchId) {
+                    return branch;
+                }
+            }
+
+            System.out.println("Invalid branch ID selected. Try again.");
+        }
+    }
+
+    private Course selectCourseByBranch(int branchId) {
+        List<Course> courses = courseService.getCoursesByBranchId(branchId);
+        if (courses.isEmpty()) {
+            System.out.println("No courses available for this branch. Please add a course first.");
+            return null;
+        }
+
+        System.out.println("\nAvailable Courses:");
+        for (Course course : courses) {
+            System.out.printf("%d | %s%n", course.getCourseId(), course.getCourseName());
+        }
+
+        while (true) {
+            int courseId = consoleInput.readInt("Select course ID: ");
+            if (courseId <= 0) {
+                System.out.println("Course ID must be positive.");
+                continue;
+            }
+
+            for (Course course : courses) {
+                if (course.getCourseId() == courseId) {
+                    return course;
+                }
+            }
+
+            System.out.println("Invalid course ID selected. Try again.");
         }
     }
 }

@@ -71,9 +71,10 @@ public class StudentDAO {
     }
 
     public List<Map<String, Object>> fetchAllStudentsWithRegistrations(Connection connection) throws SQLException {
-        String sql = "SELECT s.id, s.name, s.age, s.branch, r.course_name, r.fees_paid "
+        String sql = "SELECT s.id, s.name, s.age, s.branch, COALESCE(c.course_name, r.course_name) AS course_name, r.fees_paid "
                 + "FROM student s "
                 + "LEFT JOIN registration r ON s.id = r.student_id "
+                + "LEFT JOIN courses c ON r.course_id = c.course_id OR r.course_name = c.course_name "
                 + "ORDER BY s.id, r.reg_id";
 
         List<Map<String, Object>> result = new ArrayList<>();
@@ -94,9 +95,10 @@ public class StudentDAO {
     }
 
     public List<Map<String, Object>> fetchHighPayingStudents(Connection connection, double minFee) throws SQLException {
-        String sql = "SELECT s.id, s.name, s.age, s.branch, r.course_name, r.fees_paid "
+        String sql = "SELECT s.id, s.name, s.age, s.branch, COALESCE(c.course_name, r.course_name) AS course_name, r.fees_paid "
                 + "FROM student s "
                 + "JOIN registration r ON s.id = r.student_id "
+                + "LEFT JOIN courses c ON r.course_id = c.course_id OR r.course_name = c.course_name "
                 + "WHERE r.fees_paid > ? "
                 + "ORDER BY r.fees_paid DESC";
 

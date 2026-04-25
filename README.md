@@ -6,14 +6,15 @@ Console-based Java JDBC application with layered architecture:
 - UI Layer: `src/ui/ConsoleMenu.java`
 - Input Layer: `src/input/ConsoleInput.java`
 - Service Layer: `src/services/StudentService.java`, `src/services/RegistrationService.java`
-- DAO Layer: `src/dao/StudentDAO.java`, `src/dao/RegistrationDAO.java`
+- Course + Branch Services: `src/services/CourseService.java`, `src/services/BranchService.java`
+- DAO Layer: `src/dao/StudentDAO.java`, `src/dao/RegistrationDAO.java`, `src/dao/CourseDAO.java`, `src/dao/BranchDAO.java`
 - DB Utility: `src/util/DBUtil.java`
-- Models: `src/model/*`
+- Models: `src/model/*` including `Course.java` and `Branch.java`
 
 ## Features implemented
 
 1. Add student (duplicate ID, empty name/branch, invalid age checks)
-2. Register for course (transaction + duplicate registration check + fee validation)
+2. Register for course (transaction + duplicate registration check + fee validation + select branch then course)
 3. View all students with courses (LEFT JOIN; includes students without registrations)
 4. Search student by ID and list all registered courses
 5. Update student details (name, branch)
@@ -22,6 +23,8 @@ Console-based Java JDBC application with layered architecture:
 8. Delete student (transaction: delete registrations then student)
 9. High paying students report (fee threshold)
 10. Course-wise student count report
+11. Add new course (under a selected branch)
+12. Add new branch
 
 ## Database setup
 
@@ -36,6 +39,13 @@ Example default URL:
 `jdbc:mysql://localhost:3306/student_management?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC`
 
 `DBUtil.initializeDatabase()` creates tables automatically if they do not exist.
+
+It ensures these core tables exist:
+
+- `student`
+- `branches`
+- `courses`
+- `registration` with `course_id` foreign key support
 
 ## Build and run (Maven)
 

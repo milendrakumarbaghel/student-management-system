@@ -3,15 +3,17 @@ package model;
 public class Registration {
     private int regId;
     private int studentId;
+    private int courseId;
     private String courseName;
     private double feesPaid;
 
     public Registration() {
     }
 
-    public Registration(int regId, int studentId, String courseName, double feesPaid) {
+    public Registration(int regId, int studentId, int courseId, String courseName, double feesPaid) {
         this.regId = regId;
         this.studentId = studentId;
+        this.courseId = courseId;
         this.courseName = courseName;
         this.feesPaid = feesPaid;
     }
@@ -32,6 +34,14 @@ public class Registration {
         this.studentId = studentId;
     }
 
+    public int getCourseId() {
+        return courseId;
+    }
+
+    public void setCourseId(int courseId) {
+        this.courseId = courseId;
+    }
+
     public String getCourseName() {
         return courseName;
     }
@@ -48,4 +58,3 @@ public class Registration {
         this.feesPaid = feesPaid;
     }
 }
-
