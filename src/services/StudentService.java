@@ -1,10 +1,14 @@
 package services;
 
+import dao.BranchDAO;
 import dao.RegistrationDAO;
 import dao.StudentDAO;
+import model.Branch;
 import model.Registration;
 import model.Student;
 import util.DBUtil;
+import validation.StudentValidator;
+import validation.ValidationResult;
 
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -16,10 +20,12 @@ public class StudentService {
 
     private final StudentDAO studentDAO = new StudentDAO();
     private final RegistrationDAO registrationDAO = new RegistrationDAO();
+    private final BranchDAO branchDAO = new BranchDAO();
 
     public boolean addStudent(Student student) {
-        if (student == null || student.getId() <= 0 || isBlank(student.getName()) || student.getAge() <= 0 || isBlank(student.getBranch())) {
-            System.out.println("Validation failed: ID, name, age and branch must be valid.");
+        ValidationResult validationResult = StudentValidator.validateForAdd(student);
+        if (!validationResult.isValid()) {
+            System.out.println("Validation failed: " + validationResult.getMessage());
             return false;
         }
 
@@ -28,6 +34,14 @@ public class StudentService {
                 System.out.println("Failure: duplicate student ID.");
                 return false;
             }
+
+            Branch branch = branchDAO.findById(connection, student.getBranchId());
+            if (branch == null) {
+                System.out.println("Failure: branch does not exist.");
+                return false;
+            }
+
+            student.setBranch(branch.getBranchName());
             return studentDAO.insertStudent(connection, student);
         } catch (SQLException e) {
             System.out.println("Error while adding student: " + e.getMessage());
@@ -45,8 +59,9 @@ public class StudentService {
     }
 
     public Student findStudentById(int studentId) {
-        if (studentId <= 0) {
-            System.out.println("Validation failed: student ID must be positive.");
+        ValidationResult validationResult = StudentValidator.validateStudentId(studentId);
+        if (!validationResult.isValid()) {
+            System.out.println("Validation failed: " + validationResult.getMessage());
             return null;
         }
 
@@ -59,7 +74,8 @@ public class StudentService {
     }
 
     public List<Registration> findRegistrationsByStudentId(int studentId) {
-        if (studentId <= 0) {
+        ValidationResult validationResult = StudentValidator.validateStudentId(studentId);
+        if (!validationResult.isValid()) {
             return Collections.emptyList();
         }
 
@@ -71,9 +87,10 @@ public class StudentService {
         }
     }
 
-    public boolean updateStudent(int studentId, String name, String branch) {
-        if (studentId <= 0 || isBlank(name) || isBlank(branch)) {
-            System.out.println("Validation failed: student ID, name and branch are required.");
+    public boolean updateStudentName(int studentId, String name) {
+        ValidationResult validationResult = StudentValidator.validateForNameUpdate(studentId, name);
+        if (!validationResult.isValid()) {
+            System.out.println("Validation failed: " + validationResult.getMessage());
             return false;
         }
 
@@ -82,16 +99,86 @@ public class StudentService {
                 System.out.println("Failure: student does not exist.");
                 return false;
             }
-            return studentDAO.updateStudent(connection, studentId, name.trim(), branch.trim());
+
+            return studentDAO.updateStudentName(connection, studentId, name.trim());
         } catch (SQLException e) {
-            System.out.println("Error while updating student: " + e.getMessage());
+            System.out.println("Error while updating student name: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean updateStudentAge(int studentId, int age) {
+        ValidationResult validationResult = StudentValidator.validateForAgeUpdate(studentId, age);
+        if (!validationResult.isValid()) {
+            System.out.println("Validation failed: " + validationResult.getMessage());
+            return false;
+        }
+
+        try (Connection connection = DBUtil.getConnection()) {
+            if (!studentDAO.studentExists(connection, studentId)) {
+                System.out.println("Failure: student does not exist.");
+                return false;
+            }
+
+            return studentDAO.updateStudentAge(connection, studentId, age);
+        } catch (SQLException e) {
+            System.out.println("Error while updating student age: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean updateStudentBranch(int studentId, int branchId) {
+        ValidationResult validationResult = StudentValidator.validateForBranchUpdate(studentId, branchId);
+        if (!validationResult.isValid()) {
+            System.out.println("Validation failed: " + validationResult.getMessage());
+            return false;
+        }
+
+        try (Connection connection = DBUtil.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                if (!studentDAO.studentExists(connection, studentId)) {
+                    System.out.println("Failure: student does not exist.");
+                    connection.rollback();
+                    return false;
+                }
+
+                Branch branch = branchDAO.findById(connection, branchId);
+                if (branch == null) {
+                    System.out.println("Failure: branch does not exist.");
+                    connection.rollback();
+                    return false;
+                }
+
+                boolean updated = studentDAO.updateStudentBranch(connection, studentId, branchId, branch.getBranchName());
+                if (!updated) {
+                    connection.rollback();
+                    return false;
+                }
+
+                registrationDAO.deleteRegistrationsOutsideBranch(connection, studentId, branchId);
+                registrationDAO.moveRegistrationsToBranchCourses(connection, studentId, branchId);
+
+                connection.commit();
+                return true;
+            } catch (SQLException e) {
+                connection.rollback();
+                System.out.println("Transaction failed while updating branch. Rolled back.");
+                System.out.println("Error: " + e.getMessage());
+                return false;
+            } finally {
+                connection.setAutoCommit(true);
+            }
+        } catch (SQLException e) {
+            System.out.println("Error while updating student branch: " + e.getMessage());
             return false;
         }
     }
 
     public boolean deleteStudent(int studentId) {
-        if (studentId <= 0) {
-            System.out.println("Validation failed: student ID must be positive.");
+        ValidationResult validationResult = StudentValidator.validateStudentId(studentId);
+        if (!validationResult.isValid()) {
+            System.out.println("Validation failed: " + validationResult.getMessage());
             return false;
         }
 
@@ -129,8 +216,9 @@ public class StudentService {
     }
 
     public List<Map<String, Object>> getHighPayingStudents(double minFee) {
-        if (minFee <= 0) {
-            System.out.println("Validation failed: fee threshold must be positive.");
+        ValidationResult validationResult = StudentValidator.validateFeeThreshold(minFee);
+        if (!validationResult.isValid()) {
+            System.out.println("Validation failed: " + validationResult.getMessage());
             return Collections.emptyList();
         }
 
@@ -142,7 +230,4 @@ public class StudentService {
         }
     }
 
-    private boolean isBlank(String value) {
-        return value == null || value.trim().isEmpty();
-    }
 }

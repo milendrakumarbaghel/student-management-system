@@ -3,6 +3,8 @@ package services;
 import dao.CourseDAO;
 import model.Course;
 import util.DBUtil;
+import validation.CourseValidator;
+import validation.ValidationResult;
 
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -14,8 +16,9 @@ public class CourseService {
     private final CourseDAO courseDAO = new CourseDAO();
 
     public boolean addCourse(int branchId, String courseName) {
-        if (branchId <= 0 || isBlank(courseName)) {
-            System.out.println("Validation failed: branch ID and course name are required.");
+        ValidationResult validationResult = CourseValidator.validateForAdd(branchId, courseName);
+        if (!validationResult.isValid()) {
+            System.out.println("Validation failed: " + validationResult.getMessage());
             return false;
         }
 
@@ -42,8 +45,9 @@ public class CourseService {
     }
 
     public List<Course> getCoursesByBranchId(int branchId) {
-        if (branchId <= 0) {
-            System.out.println("Validation failed: branch ID must be positive.");
+        ValidationResult validationResult = CourseValidator.validateBranchId(branchId);
+        if (!validationResult.isValid()) {
+            System.out.println("Validation failed: " + validationResult.getMessage());
             return Collections.emptyList();
         }
 
@@ -56,8 +60,9 @@ public class CourseService {
     }
 
     public Course findCourseById(int courseId) {
-        if (courseId <= 0) {
-            System.out.println("Validation failed: course ID must be positive.");
+        ValidationResult validationResult = CourseValidator.validateCourseId(courseId);
+        if (!validationResult.isValid()) {
+            System.out.println("Validation failed: " + validationResult.getMessage());
             return null;
         }
 
@@ -69,8 +74,5 @@ public class CourseService {
         }
     }
 
-    private boolean isBlank(String value) {
-        return value == null || value.trim().isEmpty();
-    }
 }
 

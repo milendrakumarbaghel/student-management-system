@@ -28,6 +28,7 @@ public class DBUtil {
                 + "id INT PRIMARY KEY,"
                 + "name VARCHAR(50) NOT NULL,"
                 + "age INT NOT NULL,"
+                + "branch_id INT NULL,"
                 + "branch VARCHAR(50) NOT NULL"
                 + ")";
 
@@ -60,6 +61,9 @@ public class DBUtil {
             statement.execute(createBranchTable);
             statement.execute(createCoursesTable);
             statement.execute(createRegistrationTable);
+            ensureStudentBranchColumn(connection);
+            backfillStudentBranchId(connection);
+            ensureStudentBranchForeignKey(connection);
             ensureCoursesBranchColumn(connection);
             ensureCoursesBranchForeignKey(connection);
             ensureRegistrationCourseColumn(connection);
@@ -76,6 +80,34 @@ public class DBUtil {
             try (Statement statement = connection.createStatement()) {
                 statement.execute("ALTER TABLE courses ADD COLUMN branch_id INT NULL AFTER course_id");
             }
+        }
+    }
+
+    private static void ensureStudentBranchColumn(Connection connection) throws SQLException {
+        if (!columnExists(connection, "student", "branch_id")) {
+            try (Statement statement = connection.createStatement()) {
+                statement.execute("ALTER TABLE student ADD COLUMN branch_id INT NULL AFTER age");
+            }
+        }
+    }
+
+    private static void backfillStudentBranchId(Connection connection) throws SQLException {
+        if (!columnExists(connection, "student", "branch") || !columnExists(connection, "student", "branch_id")) {
+            return;
+        }
+
+        try (Statement statement = connection.createStatement()) {
+            statement.executeUpdate("UPDATE student s JOIN branches b ON s.branch = b.branch_name SET s.branch_id = b.branch_id WHERE s.branch_id IS NULL");
+        }
+    }
+
+    private static void ensureStudentBranchForeignKey(Connection connection) throws SQLException {
+        if (foreignKeyForColumnExists(connection, "student", "branch_id")) {
+            return;
+        }
+
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("ALTER TABLE student ADD CONSTRAINT fk_student_branch FOREIGN KEY (branch_id) REFERENCES branches(branch_id)");
         }
     }
 

@@ -3,6 +3,8 @@ package services;
 import dao.BranchDAO;
 import model.Branch;
 import util.DBUtil;
+import validation.BranchValidator;
+import validation.ValidationResult;
 
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -14,8 +16,9 @@ public class BranchService {
     private final BranchDAO branchDAO = new BranchDAO();
 
     public boolean addBranch(String branchName) {
-        if (isBlank(branchName)) {
-            System.out.println("Validation failed: branch name cannot be empty.");
+        ValidationResult validationResult = BranchValidator.validateBranchName(branchName);
+        if (!validationResult.isValid()) {
+            System.out.println("Validation failed: " + validationResult.getMessage());
             return false;
         }
 
@@ -42,8 +45,9 @@ public class BranchService {
     }
 
     public Branch findBranchById(int branchId) {
-        if (branchId <= 0) {
-            System.out.println("Validation failed: branch ID must be positive.");
+        ValidationResult validationResult = BranchValidator.validateBranchId(branchId);
+        if (!validationResult.isValid()) {
+            System.out.println("Validation failed: " + validationResult.getMessage());
             return null;
         }
 
@@ -55,8 +59,5 @@ public class BranchService {
         }
     }
 
-    private boolean isBlank(String value) {
-        return value == null || value.trim().isEmpty();
-    }
 }
 

@@ -4,15 +4,17 @@ public class Student {
     private int id;
     private String name;
     private int age;
+    private int branchId;
     private String branch;
 
     public Student() {
     }
 
-    public Student(int id, String name, int age, String branch) {
+    public Student(int id, String name, int age, int branchId, String branch) {
         this.id = id;
         this.name = name;
         this.age = age;
+        this.branchId = branchId;
         this.branch = branch;
     }
 
@@ -38,6 +40,14 @@ public class Student {
 
     public void setAge(int age) {
         this.age = age;
+    }
+
+    public int getBranchId() {
+        return branchId;
+    }
+
+    public void setBranchId(int branchId) {
+        this.branchId = branchId;
     }
 
     public String getBranch() {

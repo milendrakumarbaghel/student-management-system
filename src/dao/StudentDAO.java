@@ -14,12 +14,13 @@ import java.util.Map;
 public class StudentDAO {
 
     public boolean insertStudent(Connection connection, Student student) throws SQLException {
-        String sql = "INSERT INTO student (id, name, age, branch) VALUES (?, ?, ?, ?)";
+        String sql = "INSERT INTO student (id, name, age, branch_id, branch) VALUES (?, ?, ?, ?, ?)";
         try (PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
             preparedStatement.setInt(1, student.getId());
             preparedStatement.setString(2, student.getName());
             preparedStatement.setInt(3, student.getAge());
-            preparedStatement.setString(4, student.getBranch());
+            preparedStatement.setInt(4, student.getBranchId());
+            preparedStatement.setString(5, student.getBranch());
             return preparedStatement.executeUpdate() > 0;
         }
     }
@@ -35,7 +36,10 @@ public class StudentDAO {
     }
 
     public Student findById(Connection connection, int studentId) throws SQLException {
-        String sql = "SELECT id, name, age, branch FROM student WHERE id = ?";
+        String sql = "SELECT s.id, s.name, s.age, s.branch_id, COALESCE(b.branch_name, s.branch) AS branch "
+                + "FROM student s "
+                + "LEFT JOIN branches b ON s.branch_id = b.branch_id "
+                + "WHERE s.id = ?";
         try (PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
             preparedStatement.setInt(1, studentId);
             try (ResultSet resultSet = preparedStatement.executeQuery()) {
@@ -46,17 +50,36 @@ public class StudentDAO {
                         resultSet.getInt("id"),
                         resultSet.getString("name"),
                         resultSet.getInt("age"),
+                        resultSet.getInt("branch_id"),
                         resultSet.getString("branch")
                 );
             }
         }
     }
 
-    public boolean updateStudent(Connection connection, int studentId, String name, String branch) throws SQLException {
-        String sql = "UPDATE student SET name = ?, branch = ? WHERE id = ?";
+    public boolean updateStudentName(Connection connection, int studentId, String name) throws SQLException {
+        String sql = "UPDATE student SET name = ? WHERE id = ?";
         try (PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
             preparedStatement.setString(1, name);
-            preparedStatement.setString(2, branch);
+            preparedStatement.setInt(2, studentId);
+            return preparedStatement.executeUpdate() > 0;
+        }
+    }
+
+    public boolean updateStudentAge(Connection connection, int studentId, int age) throws SQLException {
+        String sql = "UPDATE student SET age = ? WHERE id = ?";
+        try (PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
+            preparedStatement.setInt(1, age);
+            preparedStatement.setInt(2, studentId);
+            return preparedStatement.executeUpdate() > 0;
+        }
+    }
+
+    public boolean updateStudentBranch(Connection connection, int studentId, int branchId, String branchName) throws SQLException {
+        String sql = "UPDATE student SET branch_id = ?, branch = ? WHERE id = ?";
+        try (PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
+            preparedStatement.setInt(1, branchId);
+            preparedStatement.setString(2, branchName);
             preparedStatement.setInt(3, studentId);
             return preparedStatement.executeUpdate() > 0;
         }
@@ -71,8 +94,9 @@ public class StudentDAO {
     }
 
     public List<Map<String, Object>> fetchAllStudentsWithRegistrations(Connection connection) throws SQLException {
-        String sql = "SELECT s.id, s.name, s.age, s.branch, COALESCE(c.course_name, r.course_name) AS course_name, r.fees_paid "
+        String sql = "SELECT s.id, s.name, s.age, COALESCE(b.branch_name, s.branch) AS branch, COALESCE(c.course_name, r.course_name) AS course_name, r.fees_paid "
                 + "FROM student s "
+                + "LEFT JOIN branches b ON s.branch_id = b.branch_id "
                 + "LEFT JOIN registration r ON s.id = r.student_id "
                 + "LEFT JOIN courses c ON r.course_id = c.course_id OR r.course_name = c.course_name "
                 + "ORDER BY s.id, r.reg_id";
@@ -95,8 +119,9 @@ public class StudentDAO {
     }
 
     public List<Map<String, Object>> fetchHighPayingStudents(Connection connection, double minFee) throws SQLException {
-        String sql = "SELECT s.id, s.name, s.age, s.branch, COALESCE(c.course_name, r.course_name) AS course_name, r.fees_paid "
+        String sql = "SELECT s.id, s.name, s.age, COALESCE(b.branch_name, s.branch) AS branch, COALESCE(c.course_name, r.course_name) AS course_name, r.fees_paid "
                 + "FROM student s "
+                + "LEFT JOIN branches b ON s.branch_id = b.branch_id "
                 + "JOIN registration r ON s.id = r.student_id "
                 + "LEFT JOIN courses c ON r.course_id = c.course_id OR r.course_name = c.course_name "
                 + "WHERE r.fees_paid > ? "

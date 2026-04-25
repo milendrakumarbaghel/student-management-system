@@ -1,5 +1,8 @@
 package input;
 
+import validation.CommonValidator;
+import validation.ValidationResult;
+
 import java.util.Scanner;
 
 public class ConsoleInput {
@@ -38,10 +41,11 @@ public class ConsoleInput {
         while (true) {
             System.out.print(prompt);
             String value = scanner.nextLine();
-            if (value != null && !value.trim().isEmpty()) {
+            ValidationResult validationResult = CommonValidator.validateNonBlank(value, "Value");
+            if (validationResult.isValid()) {
                 return value.trim();
             }
-            System.out.println("Value cannot be empty.");
+            System.out.println(validationResult.getMessage());
         }
     }
 }

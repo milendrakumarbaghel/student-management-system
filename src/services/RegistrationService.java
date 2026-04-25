@@ -4,7 +4,10 @@ import dao.CourseDAO;
 import dao.RegistrationDAO;
 import dao.StudentDAO;
 import model.Course;
+import model.Student;
 import util.DBUtil;
+import validation.RegistrationValidator;
+import validation.ValidationResult;
 
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -17,9 +20,10 @@ public class RegistrationService {
     private final StudentDAO studentDAO = new StudentDAO();
     private final CourseDAO courseDAO = new CourseDAO();
 
-    public boolean registerForCourse(int studentId, int branchId, int courseId, double fee) {
-        if (studentId <= 0 || branchId <= 0 || courseId <= 0 || fee <= 0) {
-            System.out.println("Validation failed: student ID, branch ID, course ID and positive fee are required.");
+    public boolean registerForCourse(int studentId, int courseId, double fee) {
+        ValidationResult validationResult = RegistrationValidator.validateForRegister(studentId, courseId, fee);
+        if (!validationResult.isValid()) {
+            System.out.println("Validation failed: " + validationResult.getMessage());
             return false;
         }
 
@@ -33,14 +37,15 @@ public class RegistrationService {
                     return false;
                 }
 
-                if (course.getBranchId() != branchId) {
-                    System.out.println("Failure: selected course does not belong to selected branch.");
+                Student student = studentDAO.findById(connection, studentId);
+                if (student == null) {
+                    System.out.println("Failure: student does not exist.");
                     connection.rollback();
                     return false;
                 }
 
-                if (!studentDAO.studentExists(connection, studentId)) {
-                    System.out.println("Failure: student does not exist.");
+                if (course.getBranchId() != student.getBranchId()) {
+                    System.out.println("Failure: selected course does not belong to the student's branch.");
                     connection.rollback();
                     return false;
                 }
@@ -73,19 +78,19 @@ public class RegistrationService {
         }
     }
 
-    public boolean updateCourseFee(int studentId, int courseId, double fee) {
-        if (studentId <= 0 || courseId <= 0 || fee <= 0) {
-            System.out.println("Validation failed: student ID, course ID and positive fee are required.");
+    public boolean updateCourseFee(int studentId, double fee) {
+        ValidationResult validationResult = RegistrationValidator.validateForFeeUpdate(studentId, fee);
+        if (!validationResult.isValid()) {
+            System.out.println("Validation failed: " + validationResult.getMessage());
             return false;
         }
 
         try (Connection connection = DBUtil.getConnection()) {
-            Course course = courseDAO.findById(connection, courseId);
-            if (course == null) {
-                System.out.println("Failure: course does not exist.");
+            if (!studentDAO.studentExists(connection, studentId)) {
+                System.out.println("Failure: student does not exist.");
                 return false;
             }
-            return registrationDAO.updateCourseFee(connection, studentId, courseId, course.getCourseName(), fee);
+            return registrationDAO.updateCourseFeeByStudentId(connection, studentId, fee);
         } catch (SQLException e) {
             System.out.println("Error while updating fee: " + e.getMessage());
             return false;
@@ -93,8 +98,9 @@ public class RegistrationService {
     }
 
     public boolean cancelRegistration(int studentId, int courseId) {
-        if (studentId <= 0 || courseId <= 0) {
-            System.out.println("Validation failed: student ID and course ID are required.");
+        ValidationResult validationResult = RegistrationValidator.validateForCancel(studentId, courseId);
+        if (!validationResult.isValid()) {
+            System.out.println("Validation failed: " + validationResult.getMessage());
             return false;
         }
 

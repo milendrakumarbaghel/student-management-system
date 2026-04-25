@@ -61,13 +61,11 @@ public class RegistrationDAO {
         return registrations;
     }
 
-    public boolean updateCourseFee(Connection connection, int studentId, int courseId, String courseName, double fee) throws SQLException {
-        String sql = "UPDATE registration SET fees_paid = ? WHERE student_id = ? AND (course_id = ? OR course_name = ?)";
+    public boolean updateCourseFeeByStudentId(Connection connection, int studentId, double fee) throws SQLException {
+        String sql = "UPDATE registration SET fees_paid = ? WHERE student_id = ?";
         try (PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
             preparedStatement.setDouble(1, fee);
             preparedStatement.setInt(2, studentId);
-            preparedStatement.setInt(3, courseId);
-            preparedStatement.setString(4, courseName);
             return preparedStatement.executeUpdate() > 0;
         }
     }
@@ -86,6 +84,29 @@ public class RegistrationDAO {
         String sql = "DELETE FROM registration WHERE student_id = ?";
         try (PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
             preparedStatement.setInt(1, studentId);
+            return preparedStatement.executeUpdate();
+        }
+    }
+
+    public int deleteRegistrationsOutsideBranch(Connection connection, int studentId, int branchId) throws SQLException {
+        String sql = "DELETE r FROM registration r "
+                + "LEFT JOIN courses c ON c.branch_id = ? AND c.course_name = r.course_name "
+                + "WHERE r.student_id = ? AND c.course_id IS NULL";
+        try (PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
+            preparedStatement.setInt(1, branchId);
+            preparedStatement.setInt(2, studentId);
+            return preparedStatement.executeUpdate();
+        }
+    }
+
+    public int moveRegistrationsToBranchCourses(Connection connection, int studentId, int branchId) throws SQLException {
+        String sql = "UPDATE registration r "
+                + "JOIN courses c ON c.branch_id = ? AND c.course_name = r.course_name "
+                + "SET r.course_id = c.course_id, r.course_name = c.course_name "
+                + "WHERE r.student_id = ?";
+        try (PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
+            preparedStatement.setInt(1, branchId);
+            preparedStatement.setInt(2, studentId);
             return preparedStatement.executeUpdate();
         }
     }
