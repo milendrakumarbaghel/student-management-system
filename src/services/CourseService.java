@@ -1,6 +1,9 @@
 package services;
 
 import dao.CourseDAO;
+import exceptions.DatabaseOperationException;
+import exceptions.DuplicateResourceException;
+import exceptions.ValidationException;
 import model.Course;
 import util.DBUtil;
 import validation.CourseValidator;
@@ -18,20 +21,17 @@ public class CourseService {
     public boolean addCourse(int branchId, String courseName) {
         ValidationResult validationResult = CourseValidator.validateForAdd(branchId, courseName);
         if (!validationResult.isValid()) {
-            System.out.println("Validation failed: " + validationResult.getMessage());
-            return false;
+            throw new ValidationException(validationResult.getMessage());
         }
 
         try (Connection connection = DBUtil.getConnection()) {
             String normalized = courseName.trim();
             if (courseDAO.courseNameExists(connection, branchId, normalized)) {
-                System.out.println("Failure: duplicate course name for this branch.");
-                return false;
+                throw new DuplicateResourceException("Duplicate course name for this branch.");
             }
             return courseDAO.insertCourse(connection, new Course(0, branchId, normalized));
         } catch (SQLException e) {
-            System.out.println("Error while adding course: " + e.getMessage());
-            return false;
+            throw new DatabaseOperationException("Error while adding course.", e);
         }
     }
 
@@ -39,38 +39,33 @@ public class CourseService {
         try (Connection connection = DBUtil.getConnection()) {
             return courseDAO.findAll(connection);
         } catch (SQLException e) {
-            System.out.println("Error while fetching courses: " + e.getMessage());
-            return Collections.emptyList();
+            throw new DatabaseOperationException("Error while fetching courses.", e);
         }
     }
 
     public List<Course> getCoursesByBranchId(int branchId) {
         ValidationResult validationResult = CourseValidator.validateBranchId(branchId);
         if (!validationResult.isValid()) {
-            System.out.println("Validation failed: " + validationResult.getMessage());
-            return Collections.emptyList();
+            throw new ValidationException(validationResult.getMessage());
         }
 
         try (Connection connection = DBUtil.getConnection()) {
             return courseDAO.findByBranchId(connection, branchId);
         } catch (SQLException e) {
-            System.out.println("Error while fetching courses by branch: " + e.getMessage());
-            return Collections.emptyList();
+            throw new DatabaseOperationException("Error while fetching courses by branch.", e);
         }
     }
 
     public Course findCourseById(int courseId) {
         ValidationResult validationResult = CourseValidator.validateCourseId(courseId);
         if (!validationResult.isValid()) {
-            System.out.println("Validation failed: " + validationResult.getMessage());
-            return null;
+            throw new ValidationException(validationResult.getMessage());
         }
 
         try (Connection connection = DBUtil.getConnection()) {
             return courseDAO.findById(connection, courseId);
         } catch (SQLException e) {
-            System.out.println("Error while searching course: " + e.getMessage());
-            return null;
+            throw new DatabaseOperationException("Error while searching course.", e);
         }
     }
 

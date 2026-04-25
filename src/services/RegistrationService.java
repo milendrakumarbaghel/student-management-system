@@ -3,6 +3,10 @@ package services;
 import dao.CourseDAO;
 import dao.RegistrationDAO;
 import dao.StudentDAO;
+import exceptions.DatabaseOperationException;
+import exceptions.DuplicateResourceException;
+import exceptions.ResourceNotFoundException;
+import exceptions.ValidationException;
 import model.Course;
 import model.Student;
 import util.DBUtil;
@@ -23,8 +27,7 @@ public class RegistrationService {
     public boolean registerForCourse(int studentId, int courseId, double fee) {
         ValidationResult validationResult = RegistrationValidator.validateForRegister(studentId, courseId, fee);
         if (!validationResult.isValid()) {
-            System.out.println("Validation failed: " + validationResult.getMessage());
-            return false;
+            throw new ValidationException(validationResult.getMessage());
         }
 
         try (Connection connection = DBUtil.getConnection()) {
@@ -32,88 +35,73 @@ public class RegistrationService {
             try {
                 Course course = courseDAO.findById(connection, courseId);
                 if (course == null) {
-                    System.out.println("Failure: course does not exist.");
-                    connection.rollback();
-                    return false;
+                    throw new ResourceNotFoundException("Course does not exist.");
                 }
 
                 Student student = studentDAO.findById(connection, studentId);
                 if (student == null) {
-                    System.out.println("Failure: student does not exist.");
-                    connection.rollback();
-                    return false;
+                    throw new ResourceNotFoundException("Student does not exist.");
                 }
 
                 if (course.getBranchId() != student.getBranchId()) {
-                    System.out.println("Failure: selected course does not belong to the student's branch.");
-                    connection.rollback();
-                    return false;
+                    throw new ValidationException("Selected course does not belong to the student's branch.");
                 }
 
                 if (registrationDAO.registrationExists(connection, studentId, courseId, course.getCourseName())) {
-                    System.out.println("Failure: duplicate registration for this student and course.");
-                    connection.rollback();
-                    return false;
+                    throw new DuplicateResourceException("Duplicate registration for this student and course.");
                 }
 
                 boolean inserted = registrationDAO.insertRegistration(connection, studentId, courseId, course.getCourseName(), fee);
                 if (!inserted) {
-                    connection.rollback();
-                    return false;
+                    throw new DatabaseOperationException("Failed to insert registration.");
                 }
 
                 connection.commit();
                 return true;
             } catch (SQLException e) {
                 connection.rollback();
-                System.out.println("Transaction failed during registration. Rolled back.");
-                System.out.println("Error: " + e.getMessage());
-                return false;
+                throw new DatabaseOperationException("Transaction failed during registration.", e);
+            } catch (RuntimeException e) {
+                connection.rollback();
+                throw e;
             } finally {
                 connection.setAutoCommit(true);
             }
         } catch (SQLException e) {
-            System.out.println("Error while registering course: " + e.getMessage());
-            return false;
+            throw new DatabaseOperationException("Error while registering course.", e);
         }
     }
 
     public boolean updateCourseFee(int studentId, double fee) {
         ValidationResult validationResult = RegistrationValidator.validateForFeeUpdate(studentId, fee);
         if (!validationResult.isValid()) {
-            System.out.println("Validation failed: " + validationResult.getMessage());
-            return false;
+            throw new ValidationException(validationResult.getMessage());
         }
 
         try (Connection connection = DBUtil.getConnection()) {
             if (!studentDAO.studentExists(connection, studentId)) {
-                System.out.println("Failure: student does not exist.");
-                return false;
+                throw new ResourceNotFoundException("Student does not exist.");
             }
             return registrationDAO.updateCourseFeeByStudentId(connection, studentId, fee);
         } catch (SQLException e) {
-            System.out.println("Error while updating fee: " + e.getMessage());
-            return false;
+            throw new DatabaseOperationException("Error while updating fee.", e);
         }
     }
 
     public boolean cancelRegistration(int studentId, int courseId) {
         ValidationResult validationResult = RegistrationValidator.validateForCancel(studentId, courseId);
         if (!validationResult.isValid()) {
-            System.out.println("Validation failed: " + validationResult.getMessage());
-            return false;
+            throw new ValidationException(validationResult.getMessage());
         }
 
         try (Connection connection = DBUtil.getConnection()) {
             Course course = courseDAO.findById(connection, courseId);
             if (course == null) {
-                System.out.println("Failure: course does not exist.");
-                return false;
+                throw new ResourceNotFoundException("Course does not exist.");
             }
             return registrationDAO.cancelRegistration(connection, studentId, courseId, course.getCourseName());
         } catch (SQLException e) {
-            System.out.println("Error while cancelling registration: " + e.getMessage());
-            return false;
+            throw new DatabaseOperationException("Error while cancelling registration.", e);
         }
     }
 
@@ -121,8 +109,7 @@ public class RegistrationService {
         try (Connection connection = DBUtil.getConnection()) {
             return registrationDAO.fetchCourseWiseCount(connection);
         } catch (SQLException e) {
-            System.out.println("Error while generating course-wise report: " + e.getMessage());
-            return Collections.emptyMap();
+            throw new DatabaseOperationException("Error while generating course-wise report.", e);
         }
     }
 }

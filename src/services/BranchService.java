@@ -1,6 +1,9 @@
 package services;
 
 import dao.BranchDAO;
+import exceptions.DatabaseOperationException;
+import exceptions.DuplicateResourceException;
+import exceptions.ValidationException;
 import model.Branch;
 import util.DBUtil;
 import validation.BranchValidator;
@@ -18,20 +21,17 @@ public class BranchService {
     public boolean addBranch(String branchName) {
         ValidationResult validationResult = BranchValidator.validateBranchName(branchName);
         if (!validationResult.isValid()) {
-            System.out.println("Validation failed: " + validationResult.getMessage());
-            return false;
+            throw new ValidationException(validationResult.getMessage());
         }
 
         try (Connection connection = DBUtil.getConnection()) {
             String normalized = branchName.trim();
             if (branchDAO.branchNameExists(connection, normalized)) {
-                System.out.println("Failure: duplicate branch name.");
-                return false;
+                throw new DuplicateResourceException("Duplicate branch name.");
             }
             return branchDAO.insertBranch(connection, normalized);
         } catch (SQLException e) {
-            System.out.println("Error while adding branch: " + e.getMessage());
-            return false;
+            throw new DatabaseOperationException("Error while adding branch.", e);
         }
     }
 
@@ -39,23 +39,20 @@ public class BranchService {
         try (Connection connection = DBUtil.getConnection()) {
             return branchDAO.findAll(connection);
         } catch (SQLException e) {
-            System.out.println("Error while fetching branches: " + e.getMessage());
-            return Collections.emptyList();
+            throw new DatabaseOperationException("Error while fetching branches.", e);
         }
     }
 
     public Branch findBranchById(int branchId) {
         ValidationResult validationResult = BranchValidator.validateBranchId(branchId);
         if (!validationResult.isValid()) {
-            System.out.println("Validation failed: " + validationResult.getMessage());
-            return null;
+            throw new ValidationException(validationResult.getMessage());
         }
 
         try (Connection connection = DBUtil.getConnection()) {
             return branchDAO.findById(connection, branchId);
         } catch (SQLException e) {
-            System.out.println("Error while searching branch: " + e.getMessage());
-            return null;
+            throw new DatabaseOperationException("Error while searching branch.", e);
         }
     }
 

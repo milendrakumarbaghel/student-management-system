@@ -1,5 +1,7 @@
 package ui;
 
+import exceptions.ApplicationException;
+import exceptions.DatabaseOperationException;
 import input.ConsoleInput;
 import model.Branch;
 import model.Course;
@@ -40,26 +42,34 @@ public class ConsoleMenu {
             printMenu();
             int choice = consoleInput.readInt("Choose an option: ");
 
-            switch (choice) {
-                case 1 -> addStudent();
-                case 2 -> registerForCourse();
-                case 3 -> viewAllStudents();
-                case 4 -> searchStudentById();
-                case 5 -> updateStudent();
-                case 6 -> updateCourseFee();
-                case 7 -> cancelRegistration();
-                case 8 -> deleteStudent();
-                case 9 -> highPayingReport();
-                case 10 -> courseWiseCount();
-                case 11 -> addCourse();
-                case 12 -> addBranch();
-                case 13 -> showAllBranches();
-                case 14 -> showAllCourses();
-                case 15 -> {
-                    running = false;
-                    System.out.println("Exiting... Goodbye!");
+            try {
+                switch (choice) {
+                    case 1 -> addStudent();
+                    case 2 -> registerForCourse();
+                    case 3 -> viewAllStudents();
+                    case 4 -> searchStudentById();
+                    case 5 -> updateStudent();
+                    case 6 -> updateCourseFee();
+                    case 7 -> cancelRegistration();
+                    case 8 -> deleteStudent();
+                    case 9 -> highPayingReport();
+                    case 10 -> courseWiseCount();
+                    case 11 -> addCourse();
+                    case 12 -> addBranch();
+                    case 13 -> showAllBranches();
+                    case 14 -> showAllCourses();
+                    case 15 -> {
+                        running = false;
+                        System.out.println("Exiting... Goodbye!");
+                    }
+                    default -> System.out.println("Invalid choice. Please select 1-15.");
                 }
-                default -> System.out.println("Invalid choice. Please select 1-15.");
+            } catch (DatabaseOperationException e) {
+                System.out.println("Database error: " + e.getMessage());
+            } catch (ApplicationException e) {
+                System.out.println(e.getMessage());
+            } catch (Exception e) {
+                System.out.println("Unexpected error: " + e.getMessage());
             }
         }
     }

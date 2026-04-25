@@ -3,6 +3,10 @@ package services;
 import dao.BranchDAO;
 import dao.RegistrationDAO;
 import dao.StudentDAO;
+import exceptions.DatabaseOperationException;
+import exceptions.DuplicateResourceException;
+import exceptions.ResourceNotFoundException;
+import exceptions.ValidationException;
 import model.Branch;
 import model.Registration;
 import model.Student;
@@ -25,27 +29,23 @@ public class StudentService {
     public boolean addStudent(Student student) {
         ValidationResult validationResult = StudentValidator.validateForAdd(student);
         if (!validationResult.isValid()) {
-            System.out.println("Validation failed: " + validationResult.getMessage());
-            return false;
+            throw new ValidationException(validationResult.getMessage());
         }
 
         try (Connection connection = DBUtil.getConnection()) {
             if (studentDAO.studentExists(connection, student.getId())) {
-                System.out.println("Failure: duplicate student ID.");
-                return false;
+                throw new DuplicateResourceException("Duplicate student ID.");
             }
 
             Branch branch = branchDAO.findById(connection, student.getBranchId());
             if (branch == null) {
-                System.out.println("Failure: branch does not exist.");
-                return false;
+                throw new ResourceNotFoundException("Branch does not exist.");
             }
 
             student.setBranch(branch.getBranchName());
             return studentDAO.insertStudent(connection, student);
         } catch (SQLException e) {
-            System.out.println("Error while adding student: " + e.getMessage());
-            return false;
+            throw new DatabaseOperationException("Error while adding student.", e);
         }
     }
 
@@ -53,107 +53,91 @@ public class StudentService {
         try (Connection connection = DBUtil.getConnection()) {
             return studentDAO.fetchAllStudentsWithRegistrations(connection);
         } catch (SQLException e) {
-            System.out.println("Error while fetching students: " + e.getMessage());
-            return Collections.emptyList();
+            throw new DatabaseOperationException("Error while fetching students.", e);
         }
     }
 
     public Student findStudentById(int studentId) {
         ValidationResult validationResult = StudentValidator.validateStudentId(studentId);
         if (!validationResult.isValid()) {
-            System.out.println("Validation failed: " + validationResult.getMessage());
-            return null;
+            throw new ValidationException(validationResult.getMessage());
         }
 
         try (Connection connection = DBUtil.getConnection()) {
             return studentDAO.findById(connection, studentId);
         } catch (SQLException e) {
-            System.out.println("Error while searching student: " + e.getMessage());
-            return null;
+            throw new DatabaseOperationException("Error while searching student.", e);
         }
     }
 
     public List<Registration> findRegistrationsByStudentId(int studentId) {
         ValidationResult validationResult = StudentValidator.validateStudentId(studentId);
         if (!validationResult.isValid()) {
-            return Collections.emptyList();
+            throw new ValidationException(validationResult.getMessage());
         }
 
         try (Connection connection = DBUtil.getConnection()) {
             return registrationDAO.findByStudentId(connection, studentId);
         } catch (SQLException e) {
-            System.out.println("Error while fetching registrations: " + e.getMessage());
-            return Collections.emptyList();
+            throw new DatabaseOperationException("Error while fetching registrations.", e);
         }
     }
 
     public boolean updateStudentName(int studentId, String name) {
         ValidationResult validationResult = StudentValidator.validateForNameUpdate(studentId, name);
         if (!validationResult.isValid()) {
-            System.out.println("Validation failed: " + validationResult.getMessage());
-            return false;
+            throw new ValidationException(validationResult.getMessage());
         }
 
         try (Connection connection = DBUtil.getConnection()) {
             if (!studentDAO.studentExists(connection, studentId)) {
-                System.out.println("Failure: student does not exist.");
-                return false;
+                throw new ResourceNotFoundException("Student does not exist.");
             }
 
             return studentDAO.updateStudentName(connection, studentId, name.trim());
         } catch (SQLException e) {
-            System.out.println("Error while updating student name: " + e.getMessage());
-            return false;
+            throw new DatabaseOperationException("Error while updating student name.", e);
         }
     }
 
     public boolean updateStudentAge(int studentId, int age) {
         ValidationResult validationResult = StudentValidator.validateForAgeUpdate(studentId, age);
         if (!validationResult.isValid()) {
-            System.out.println("Validation failed: " + validationResult.getMessage());
-            return false;
+            throw new ValidationException(validationResult.getMessage());
         }
 
         try (Connection connection = DBUtil.getConnection()) {
             if (!studentDAO.studentExists(connection, studentId)) {
-                System.out.println("Failure: student does not exist.");
-                return false;
+                throw new ResourceNotFoundException("Student does not exist.");
             }
 
             return studentDAO.updateStudentAge(connection, studentId, age);
         } catch (SQLException e) {
-            System.out.println("Error while updating student age: " + e.getMessage());
-            return false;
+            throw new DatabaseOperationException("Error while updating student age.", e);
         }
     }
 
     public boolean updateStudentBranch(int studentId, int branchId) {
         ValidationResult validationResult = StudentValidator.validateForBranchUpdate(studentId, branchId);
         if (!validationResult.isValid()) {
-            System.out.println("Validation failed: " + validationResult.getMessage());
-            return false;
+            throw new ValidationException(validationResult.getMessage());
         }
 
         try (Connection connection = DBUtil.getConnection()) {
             connection.setAutoCommit(false);
             try {
                 if (!studentDAO.studentExists(connection, studentId)) {
-                    System.out.println("Failure: student does not exist.");
-                    connection.rollback();
-                    return false;
+                    throw new ResourceNotFoundException("Student does not exist.");
                 }
 
                 Branch branch = branchDAO.findById(connection, branchId);
                 if (branch == null) {
-                    System.out.println("Failure: branch does not exist.");
-                    connection.rollback();
-                    return false;
+                    throw new ResourceNotFoundException("Branch does not exist.");
                 }
 
                 boolean updated = studentDAO.updateStudentBranch(connection, studentId, branchId, branch.getBranchName());
                 if (!updated) {
-                    connection.rollback();
-                    return false;
+                    throw new DatabaseOperationException("Failed to update student branch.");
                 }
 
                 registrationDAO.deleteRegistrationsOutsideBranch(connection, studentId, branchId);
@@ -163,70 +147,64 @@ public class StudentService {
                 return true;
             } catch (SQLException e) {
                 connection.rollback();
-                System.out.println("Transaction failed while updating branch. Rolled back.");
-                System.out.println("Error: " + e.getMessage());
-                return false;
+                throw new DatabaseOperationException("Transaction failed while updating branch.", e);
+            } catch (RuntimeException e) {
+                connection.rollback();
+                throw e;
             } finally {
                 connection.setAutoCommit(true);
             }
         } catch (SQLException e) {
-            System.out.println("Error while updating student branch: " + e.getMessage());
-            return false;
+            throw new DatabaseOperationException("Error while updating student branch.", e);
         }
     }
 
     public boolean deleteStudent(int studentId) {
         ValidationResult validationResult = StudentValidator.validateStudentId(studentId);
         if (!validationResult.isValid()) {
-            System.out.println("Validation failed: " + validationResult.getMessage());
-            return false;
+            throw new ValidationException(validationResult.getMessage());
         }
 
         try (Connection connection = DBUtil.getConnection()) {
             connection.setAutoCommit(false);
             try {
                 if (!studentDAO.studentExists(connection, studentId)) {
-                    System.out.println("Failure: student does not exist.");
-                    connection.rollback();
-                    return false;
+                    throw new ResourceNotFoundException("Student does not exist.");
                 }
 
                 registrationDAO.deleteByStudentId(connection, studentId);
                 boolean deleted = studentDAO.deleteStudent(connection, studentId);
 
                 if (!deleted) {
-                    connection.rollback();
-                    return false;
+                    throw new DatabaseOperationException("Failed to delete student.");
                 }
 
                 connection.commit();
                 return true;
             } catch (SQLException e) {
                 connection.rollback();
-                System.out.println("Transaction failed while deleting student. Rolled back.");
-                System.out.println("Error: " + e.getMessage());
-                return false;
+                throw new DatabaseOperationException("Transaction failed while deleting student.", e);
+            } catch (RuntimeException e) {
+                connection.rollback();
+                throw e;
             } finally {
                 connection.setAutoCommit(true);
             }
         } catch (SQLException e) {
-            System.out.println("Error while deleting student: " + e.getMessage());
-            return false;
+            throw new DatabaseOperationException("Error while deleting student.", e);
         }
     }
 
     public List<Map<String, Object>> getHighPayingStudents(double minFee) {
         ValidationResult validationResult = StudentValidator.validateFeeThreshold(minFee);
         if (!validationResult.isValid()) {
-            System.out.println("Validation failed: " + validationResult.getMessage());
-            return Collections.emptyList();
+            throw new ValidationException(validationResult.getMessage());
         }
 
         try (Connection connection = DBUtil.getConnection()) {
             return studentDAO.fetchHighPayingStudents(connection, minFee);
         } catch (SQLException e) {
-            System.out.println("Error while generating report: " + e.getMessage());
-            return Collections.emptyList();
+            throw new DatabaseOperationException("Error while generating report.", e);
         }
     }
 
